@@ -7,8 +7,8 @@ std::array<uint8_t, 8> servo = {0}; // 0: 右, 1: 中央, 2: 左
 
 // 定数定義
 const int BRUSHLESS_POWER = 5000;
-const int servo_pos_low = 0;
-const int servo_pos_high = 200;
+const int SERVO_POS_LOW = 0;
+const int SERVO_POS_HIGH = 200;
 
 BufferedSerial pc(USBTX, USBRX, 115200);
 SerialManager serial(pc, 2, LED1, BUTTON1); // ID:2 サブNucleo
@@ -50,16 +50,16 @@ void mechanism_control_thread()
             if (input.ps) {
                 all_servo_state = !all_servo_state;
                 for (int i = 0; i < 3; i++)
-                    servo[i] = all_servo_state ? servo_pos_high : servo_pos_low;
+                    servo[i] = all_servo_state ? SERVO_POS_HIGH : SERVO_POS_LOW;
             } else if (input.r2) {
                 servo_state[0] = !servo_state[0];
-                servo[0] = servo_state[0] ? servo_pos_high : servo_pos_low;
+                servo[0] = servo_state[0] ? SERVO_POS_HIGH : SERVO_POS_LOW;
             } else if (input.options) {
                 servo_state[1] = !servo_state[1];
-                servo[1] = servo_state[1] ? servo_pos_high : servo_pos_low;
+                servo[1] = servo_state[1] ? SERVO_POS_HIGH : SERVO_POS_LOW;
             } else if (input.l2) {
                 servo_state[2] = !servo_state[2];
-                servo[2] = servo_state[2] ? servo_pos_high : servo_pos_low;
+                servo[2] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
             }
         }
         else
@@ -69,7 +69,7 @@ void mechanism_control_thread()
                 mech_brushless.set_power(i, 0);
             // サーボも初期位置に
             for (int i = 0; i < 3; i++)
-                servo[i] = servo_pos_low;
+                servo[i] = SERVO_POS_LOW;
         }
 
         ThisThread::sleep_for(15ms);
