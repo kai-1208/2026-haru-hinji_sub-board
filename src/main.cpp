@@ -2,6 +2,7 @@
 #include "serial_manager.hpp"
 #include "c610.hpp"
 #include "controller_input.hpp"
+#include "led_controller.hpp"
 
 std::array<uint8_t, 8> servo = {0}; // 0: 右, 1: 中央, 2: 左
 
@@ -19,11 +20,17 @@ CAN can2(PB_12, PB_13, (int)1e6); // いなばうわあ用
 
 C610 mech_brushless(can2); // いなばうわあ
 ControllerInput input;
+LedController Led(PA_9, PA_10);
 
 int16_t inaba_power[3] = {0}; // 0: 右, 1: 左, 2: 中央
 
 bool servo_state[3] = {false};
 bool all_servo_state = false;
+
+DigitalIn emergency_switch(PC_10);
+
+LedState prev_state = LedState::Unknown;
+LedState curr_state = LedState::Normal;
 
 /**
  * @brief 機構制御
@@ -70,10 +77,32 @@ void mechanism_control_thread() {
     }
 }
 
+/**
+ * @brief ネオピクセル光らせます
+ */
+void led_state_thread() {
+    while (1) {
+        if (emergency_switch.read() == 1) {
+            curr_state = LedState::OFF;
+        } else {
+            curr_state = LedState::Normal;
+        }
+        Led.sendLedState(curr_state);
+
+        ThisThread::sleep_for(50ms);
+    }
+}
+
 int main() {
+    Led.setup();
+    emergency_switch.mode(PullUp);
+
     // スレッド起動
     Thread mech_thread;
     mech_thread.start(mechanism_control_thread);
+
+    Thread led_thread;
+    led_thread.start(led_state_thread);
 
     Timer can_send_timer;
     can_send_timer.start();
