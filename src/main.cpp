@@ -27,7 +27,7 @@ int16_t inaba_power[3] = {0}; // 0: 右, 1: 左, 2: 中央
 bool servo_state[3] = {false};
 bool all_servo_state = false;
 
-DigitalIn emergency_switch(PC_10);
+DigitalIn emergency_switch(PC_11), limit_switch1(PC_1), limit_switch2(PC_2), limit_switch3(PC_3), limit_switch4(PC_4), limit_switch5(PC_10);
 
 LedState prev_state = LedState::Unknown;
 LedState curr_state = LedState::Normal;
@@ -96,6 +96,11 @@ void led_state_thread() {
 int main() {
     Led.setup();
     emergency_switch.mode(PullUp);
+    limit_switch1.mode(PullUp);
+    limit_switch2.mode(PullUp);
+    limit_switch3.mode(PullUp);
+    limit_switch4.mode(PullUp);
+    limit_switch5.mode(PullUp);
 
     // スレッド起動
     Thread mech_thread;
