@@ -28,12 +28,9 @@ bool all_servo_state = false;
 /**
  * @brief 機構制御
  */
-void mechanism_control_thread()
-{
-    while (1)
-    {
-        if (serial.is_connected())
-        {
+void mechanism_control_thread() {
+    while (1) {
+        if (serial.is_connected()) {
             input.update(serial);
             input.print_debug(); // デバッグ表示
 
@@ -61,9 +58,7 @@ void mechanism_control_thread()
                 servo_state[2] = !servo_state[2];
                 servo[2] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
             }
-        }
-        else
-        {
+        } else {
             // 通信切断時は停止
             for (int i = 1; i < 4; i++)
                 mech_brushless.set_power(i, 0);
@@ -71,13 +66,11 @@ void mechanism_control_thread()
             for (int i = 0; i < 3; i++)
                 servo[i] = SERVO_POS_LOW;
         }
-
         ThisThread::sleep_for(15ms);
     }
 }
 
-int main()
-{
+int main() {
     // スレッド起動
     Thread mech_thread;
     mech_thread.start(mechanism_control_thread);
@@ -85,11 +78,9 @@ int main()
     Timer can_send_timer;
     can_send_timer.start();
 
-    while (1)
-    {
+    while (1) {
         // can送信
-        if (can_send_timer.elapsed_time().count() / 1000 >= 30)
-        {
+        if (can_send_timer.elapsed_time().count() / 1000 >= 20) {
             can_send_timer.reset();
             mech_brushless.send_message();
             CANMessage msg1(140, reinterpret_cast<const uint8_t *>(servo.data()), 8);
