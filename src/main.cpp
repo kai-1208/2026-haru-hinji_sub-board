@@ -27,11 +27,11 @@ int16_t inaba_power[3] = {0}; // 0: 右, 1: 左, 2: 中央
 bool servo_state[3] = {false};
 bool all_servo_state = false;
 
-DigitalIn emergency_sw(PC_12), limit_sw1(PC_1), 
-        limit_sw2(PC_2), limit_sw3(PC_3), 
-        limit_sw4(PC_4), limit_sw5(PC_10),
-        limit_sw6(PC_11), limit_laser1(PC_13),
-        limit_laser2(PC_14), limit_laser3(PC_15);
+DigitalIn emergency_sw(PC_12), limit_sw1(PC_1),
+    limit_sw2(PC_2), limit_sw3(PC_3),
+    limit_sw4(PC_4), limit_sw5(PC_10),
+    limit_sw6(PC_11), limit_laser1(PC_13),
+    limit_laser2(PC_14), limit_laser3(PC_15);
 
 LedState prev_state = LedState::Unknown;
 LedState curr_state = LedState::Normal;
@@ -41,51 +41,75 @@ float dt = 0.0;
 /**
  * @brief 機構制御
  */
-void mechanism_control_thread() {
-    while (1) {
-        if (serial.is_connected()) {
-            input.update(serial);
-            input.print_debug(); // デバッグ表示
+void mechanism_control_thread()
+{
+    while (1)
+    {
+        if (serial.is_connected())
+        {
+            input.update(serial.received_nums, serial.received_flags);
+            // input.print_debug(); // デバッグ表示
 
             // いなばうわあ
             inaba_power[0] = input.cross ? BRUSHLESS_POWER : (input.triangle ? -BRUSHLESS_POWER : 0);
             inaba_power[1] = input.up ? BRUSHLESS_POWER : (input.down ? -BRUSHLESS_POWER : 0);
             inaba_power[2] = input.r1 ? BRUSHLESS_POWER : (input.l1 ? -BRUSHLESS_POWER : 0);
-            if (limit_sw1.read() == 1 && inaba_power[0] < 0) inaba_power[0] = 0;
-            if (limit_sw2.read() == 1 && inaba_power[1] < 0) inaba_power[1] = 0;
-            if (limit_sw3.read() == 1 && inaba_power[2] < 0) inaba_power[2] = 0;
-            if (limit_sw4.read() == 1 && inaba_power[0] > 0) inaba_power[0] = 0;
-            if (limit_sw5.read() == 1 && inaba_power[1] > 0) inaba_power[1] = 0;
-            if (limit_sw6.read() == 1 && inaba_power[2] > 0) inaba_power[2] = 0;
-            for (int i = 0; i < 3; i++) {
+            if (limit_sw1.read() == 1 && inaba_power[0] < 0)
+                inaba_power[0] = 0;
+            if (limit_sw2.read() == 1 && inaba_power[1] < 0)
+                inaba_power[1] = 0;
+            if (limit_sw3.read() == 1 && inaba_power[2] < 0)
+                inaba_power[2] = 0;
+            if (limit_sw4.read() == 1 && inaba_power[0] > 0)
+                inaba_power[0] = 0;
+            if (limit_sw5.read() == 1 && inaba_power[1] > 0)
+                inaba_power[1] = 0;
+            if (limit_sw6.read() == 1 && inaba_power[2] > 0)
+                inaba_power[2] = 0;
+            for (int i = 0; i < 3; i++)
+            {
                 mech_brushless.set_power(i + 1, inaba_power[i]);
             }
 
             // やぐらあーむ
-            if (input.ps) {
+            if (input.ps)
+            {
                 all_servo_state = !all_servo_state;
                 for (int i = 0; i < 3; i++)
                     servo[i] = all_servo_state ? SERVO_POS_HIGH : SERVO_POS_LOW;
-            } else if (input.r2) {
+            }
+            else if (input.r2)
+            {
                 servo_state[0] = !servo_state[0];
                 servo[0] = servo_state[0] ? SERVO_POS_HIGH : SERVO_POS_LOW;
-            } else if (input.options) {
+            }
+            else if (input.options)
+            {
                 servo_state[1] = !servo_state[1];
                 servo[1] = servo_state[1] ? SERVO_POS_HIGH : SERVO_POS_LOW;
-            } else if (input.l2) {
+            }
+            else if (input.l2)
+            {
                 servo_state[2] = !servo_state[2];
                 servo[2] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
             }
 
             // 以下センサーによる自動制御
-            if (limit_laser1.read() == 1) {
+            if (limit_laser1.read() == 1)
+            {
                 servo[0] = SERVO_POS_HIGH;
-            } else if (limit_laser2.read() == 1) {
+            }
+            else if (limit_laser2.read() == 1)
+            {
                 servo[1] = SERVO_POS_HIGH;
-            } else if (limit_laser3.read() == 1) {
+            }
+            else if (limit_laser3.read() == 1)
+            {
                 servo[2] = SERVO_POS_HIGH;
             }
-        } else {
+        }
+        else
+        {
             // 通信切断時は停止
             for (int i = 1; i < 4; i++)
                 mech_brushless.set_power(i, 0);
@@ -100,11 +124,16 @@ void mechanism_control_thread() {
 /**
  * @brief ネオピクセル光らせます
  */
-void led_state_thread() {
-    while (1) {
-        if (emergency_sw.read() == 1) {
+void led_state_thread()
+{
+    while (1)
+    {
+        if (emergency_sw.read() == 1)
+        {
             curr_state = LedState::OFF;
-        } else {
+        }
+        else
+        {
             curr_state = LedState::Normal;
         }
         Led.sendLedState(curr_state);
@@ -113,7 +142,22 @@ void led_state_thread() {
     }
 }
 
-int main() {
+void move(std::vector<float> wheel_speeds)
+{ // rad/s
+    if (wheel_speeds.size() == 4)
+    {
+        std::string log_msg = "";
+        for (size_t i = 0; i < wheel_speeds.size(); i++)
+        {
+            float power = wheel_speeds[i] * 30.0 / M_PI;
+            log_msg += std::to_string(int(power)) + " ";
+        }
+        serial.send_log(log_msg);
+    }
+}
+
+int main()
+{
     pc.set_blocking(true);
     pc.set_baud(115200);
     Led.setup();
@@ -135,19 +179,22 @@ int main() {
     Thread led_thread;
     led_thread.start(led_state_thread);
 
-    // Timer can_send_timer;
-    // can_send_timer.start();
+    Timer can_send_timer;
+    can_send_timer.start();
 
     auto start = HighResClock::now();
     auto end = HighResClock::now();
 
-    while (1) {
+    while (1)
+    {
         end = HighResClock::now();
         std::chrono::duration<float> elapsed_seconds = end - start;
         dt = elapsed_seconds.count();
 
-        if (std::chrono::duration<float> (dt) > 10ms) {
+        if (std::chrono::duration<float>(dt) > 10ms)
+        {
             start = HighResClock::now();
+            move(serial.received_nums);
             // can送信
             // if (can_send_timer.elapsed_time().count() / 1000 >= 20) {
             //     can_send_timer.reset();
@@ -155,7 +202,7 @@ int main() {
             //     CANMessage msg1(140, reinterpret_cast<const uint8_t *>(servo.data()), 8);
             //     can1.write(msg1);
             // }
-    
+
             // pcへ現在の状態を送信
             // if (serial.is_connected() && can_send_timer.elapsed_time().count() / 1000 >= 100) {
             //     std::vector<float> feedback_data = {
