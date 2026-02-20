@@ -4,10 +4,10 @@
 #include "mbed.h"
 #include "serial_manager.hpp"
 
-// #define ARRAY_PRINTF
+#define WITH_SERIAL_MANAGER
 
 // 定数定義
-const int BRUSHLESS_POWER = 5000;
+const int BRUSHLESS_POWER = 3000;
 const int SERVO_POS_LOW = 0;
 const int SERVO_POS_HIGH = 200;
 
@@ -50,6 +50,7 @@ void mechanism_control_thread () {
       inaba_power[0] = input.cross ? BRUSHLESS_POWER : (input.triangle ? -BRUSHLESS_POWER : 0);
       inaba_power[1] = input.up ? BRUSHLESS_POWER : (input.down ? -BRUSHLESS_POWER : 0);
       inaba_power[2] = input.r1 ? BRUSHLESS_POWER : (input.l1 ? -BRUSHLESS_POWER : 0);
+      inaba_power[2] = -inaba_power[2];  // モーターの向きに合わせて反転
       if (limit_sw1.read () == 0 && inaba_power[0] < 0) inaba_power[0] = 0;
       if (limit_sw2.read () == 0 && inaba_power[1] < 0) inaba_power[1] = 0;
       if (limit_sw3.read () == 0 && inaba_power[2] < 0) inaba_power[2] = 0;
@@ -61,19 +62,30 @@ void mechanism_control_thread () {
       }
 
       // やぐらあーむ
-      if (input.ps) {
+      static bool pre_ps = false;
+      static bool pre_r2 = false;
+      static bool pre_options = false;
+      static bool pre_l2 = false;
+      if (input.ps && !pre_ps) {
         all_servo_state = !all_servo_state;
         for (int i = 0; i < 3; i++) servo[i] = all_servo_state ? SERVO_POS_HIGH : SERVO_POS_LOW;
-      } else if (input.r2) {
+      }
+      pre_ps = input.ps;
+      if (input.r2 && !pre_r2) {
         servo_state[0] = !servo_state[0];
         servo[0] = servo_state[0] ? SERVO_POS_HIGH : SERVO_POS_LOW;
-      } else if (input.options) {
+      }
+      pre_r2 = input.r2;
+      if (input.options && !pre_options) {
         servo_state[1] = !servo_state[1];
         servo[1] = servo_state[1] ? SERVO_POS_HIGH : SERVO_POS_LOW;
-      } else if (input.l2) {
+      }
+      pre_options = input.options;
+      if (input.l2 && !pre_l2) {
         servo_state[2] = !servo_state[2];
         servo[2] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
       }
+      pre_l2 = input.l2;
 
       // 以下センサーによる自動制御
       if (limit_laser1.read () == 0) {
@@ -89,7 +101,7 @@ void mechanism_control_thread () {
       // サーボも初期位置に
       for (int i = 0; i < 3; i++) servo[i] = SERVO_POS_LOW;
     }
-    ThisThread::sleep_for (15ms);
+    ThisThread::sleep_for (10ms);
   }
 }
 
@@ -141,7 +153,7 @@ int main () {
     if (std::chrono::duration<float> (dt) > 1ms) {
       start = HighResClock::now ();
 
-#ifdef ARRAY_PRINTF
+#ifndef WITH_SERIAL_MANAGER
       if (limit_sw1.read () == 0) printf ("1");
       if (limit_sw2.read () == 0) printf ("2");
       if (limit_sw3.read () == 0) printf ("3");
@@ -186,14 +198,11 @@ int main () {
       }
 
       // can送信
-      // if (can_send_timer.elapsed_time().count() / 1000 >= 20) {
-      //     can_send_timer.reset();
-      //     mech_brushless.send_message();
-      //     CANMessage msg1(140, reinterpret_cast<const uint8_t *>(servo.data()), 8);
-      //     can1.write(msg1);
-      // }
+      mech_brushless.send_message ();
+      CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
+      can1.write (msg1);
 
-#ifndef ARRAY_PRINTF
+#ifdef WITH_SERIAL_MANAGER
       // pcへ現在の状態を送信
       static int log_counter = 0;
       if (serial.is_connected () && log_counter++ % 10 == 0) {
@@ -220,7 +229,5 @@ int main () {
       }
     }
 #endif
-
-    // ThisThread::sleep_for(1ms);
   }
 }
