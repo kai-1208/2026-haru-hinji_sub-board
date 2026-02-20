@@ -33,8 +33,8 @@ DigitalIn emergency_sw (PC_13), limit_sw1 (PC_10), limit_sw2 (PC_11), limit_sw3 
 
 LedState prev_state = LedState::Unknown;
 LedState curr_state = LedState::Normal;
-mbed::HighResClock::time_point last_can1_time = HighResClock::now();
-mbed::HighResClock::time_point last_can2_time = HighResClock::now();
+mbed::HighResClock::time_point last_can1_time = HighResClock::now ();
+mbed::HighResClock::time_point last_can2_time = HighResClock::now ();
 
 bool can1_timeout = false;
 bool can2_timeout = false;
@@ -112,13 +112,13 @@ void mechanism_control_thread () {
 void led_state_thread () {
   // can死んでないか確認
   CANMessage msg;
-  if (can1.read(msg)) last_can1_time = HighResClock::now();
-  if (can2.read(msg)) last_can2_time = HighResClock::now();
+  if (can1.read (msg)) last_can1_time = HighResClock::now ();
+  if (can2.read (msg)) last_can2_time = HighResClock::now ();
 
-  auto now = HighResClock::now();
+  auto now = HighResClock::now ();
   can1_timeout = std::chrono::duration<float> (now - last_can1_time).count () > 0.05f;
   can2_timeout = std::chrono::duration<float> (now - last_can2_time).count () > 0.05f;
-  
+
   if (emergency_sw.read () == 0) {
     curr_state = LedState::OFF;
   } else if (can1_timeout || can2_timeout) {
@@ -171,6 +171,7 @@ int main () {
       mechanism_control_thread ();
       mechanism_loop_timestamp = now_timestamp;
 
+      mech_brushless.send_message ();
       CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
       can1.write (msg1);
     }
