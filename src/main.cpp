@@ -198,9 +198,23 @@ int main () {
       static int log_counter = 0;
       if (serial.is_connected () && log_counter++ % 10 == 0) {
         std::string log_msg = "";
-        for (int i = 0; i < serial.received_flags.size (); i++) {
-          log_msg += std::to_string (serial.received_flags[i]) + " ";
-        }
+        log_msg += input.circle ? "○ " : "";
+        log_msg += input.cross ? "× " : "";
+        log_msg += input.triangle ? "△ " : "";
+        log_msg += input.square ? "□ " : "";
+        log_msg += input.l1 ? "L1 " : "";
+        log_msg += input.r1 ? "R1 " : "";
+        log_msg += input.l2 ? "L2 " : "";
+        log_msg += input.r2 ? "R2 " : "";
+        log_msg += input.share ? "Share " : "";
+        log_msg += input.options ? "Options " : "";
+        log_msg += input.ps ? "PS " : "";
+        log_msg += input.l3 ? "L3 " : "";
+        log_msg += input.r3 ? "R3 " : "";
+        log_msg += input.down ? "Down " : "";
+        log_msg += input.right ? "Right " : "";
+        log_msg += input.up ? "Up " : "";
+        log_msg += input.left ? "Left " : "";
         serial.send_log (log_msg);
         log_counter = 0;
       }
