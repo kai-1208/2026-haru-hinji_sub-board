@@ -113,8 +113,8 @@ void led_state_thread () {
   if (can2.read(msg)) last_can2_time = HighResClock::now();
 
   auto now = HighResClock::now();
-  can1_timeout = std::chrono::duration<float> (now - last_can1_time).count () > 50ms ();
-  can2_timeout = std::chrono::duration<float> (now - last_can2_time).count () > 50ms ();
+  can1_timeout = std::chrono::duration<float> (now - last_can1_time).count () > 0.05f;
+  can2_timeout = std::chrono::duration<float> (now - last_can2_time).count () > 0.05f;
   
   if (emergency_sw.read () == 0) {
     curr_state = LedState::OFF;
