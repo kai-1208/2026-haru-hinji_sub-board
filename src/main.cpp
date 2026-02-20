@@ -8,8 +8,8 @@
 
 // 定数定義
 const int BRUSHLESS_POWER = 3000;
-const int SERVO_POS_LOW = 0;
-const int SERVO_POS_HIGH = 200;
+const int SERVO_POS_LOW = 80;
+const int SERVO_POS_HIGH = 20;
 
 BufferedSerial pc (USBTX, USBRX, 115200);
 SerialManager serial (pc, 2, LED1, BUTTON1);  // ID:2 サブNucleo
@@ -51,13 +51,16 @@ void mechanism_control_thread () {
     inaba_power[0] = input.cross ? BRUSHLESS_POWER : (input.triangle ? -BRUSHLESS_POWER : 0);
     inaba_power[1] = input.up ? BRUSHLESS_POWER : (input.down ? -BRUSHLESS_POWER : 0);
     inaba_power[2] = input.r1 ? BRUSHLESS_POWER : (input.l1 ? -BRUSHLESS_POWER : 0);
-    inaba_power[2] = -inaba_power[2];  // モーターの向きに合わせて反転
+
     if (limit_sw1.read () == 0 && inaba_power[0] < 0) inaba_power[0] = 0;
     if (limit_sw2.read () == 0 && inaba_power[1] < 0) inaba_power[1] = 0;
     if (limit_sw3.read () == 0 && inaba_power[2] < 0) inaba_power[2] = 0;
     if (limit_sw4.read () == 0 && inaba_power[0] > 0) inaba_power[0] = 0;
     if (limit_sw5.read () == 0 && inaba_power[1] > 0) inaba_power[1] = 0;
     if (limit_sw6.read () == 0 && inaba_power[2] > 0) inaba_power[2] = 0;
+
+    inaba_power[2] = -inaba_power[2];  // モーターの向きに合わせて反転 //条件の整合性のため、最後に反転させる
+
     for (int i = 0; i < 3; i++) {
       mech_brushless.set_power (i + 1, inaba_power[i]);
     }
@@ -162,9 +165,26 @@ int main () {
     float mechanism_loop_dt = std::chrono::duration<float> (now_timestamp - mechanism_loop_timestamp).count ();
     float led_loop_dt = std::chrono::duration<float> (now_timestamp - led_loop_timestamp).count ();
 
-    if (std::chrono::duration<float> (mechanism_loop_dt) >= 10ms) {
+    if (std::chrono::duration<float> (mechanism_loop_dt) >= 50ms) {
+      mech_brushless.param_update ();  // パラメータ更新
+
       mechanism_control_thread ();
       mechanism_loop_timestamp = now_timestamp;
+
+      static int can_fail_count = 0;
+      if (!mech_brushless.send_message ()) {
+        can_fail_count++;
+        if (can_fail_count >= 10) {  // 10回連続失敗したらリセット
+          mech_brushless.can_reset ();
+          serial.send_log ("CAN2 reset");
+          can_fail_count = 0;
+        }
+      } else {
+        can_fail_count = 0;  // 成功したらカウンターリセット
+      }
+
+      CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
+      can1.write (msg1);
     }
 
     if (std::chrono::duration<float> (led_loop_dt) >= 50ms) {
@@ -218,11 +238,6 @@ int main () {
         log_counter = 0;
       }
 #endif
-
-      // can送信
-      mech_brushless.send_message ();
-      CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
-      can1.write (msg1);
     }
   }
 }
