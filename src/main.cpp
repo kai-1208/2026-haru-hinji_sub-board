@@ -4,6 +4,8 @@
 #include "mbed.h"
 #include "serial_manager.hpp"
 
+// #define ARRAY_PRINTF
+
 // 定数定義
 const int BRUSHLESS_POWER = 5000;
 const int SERVO_POS_LOW = 0;
@@ -139,17 +141,20 @@ int main () {
     if (std::chrono::duration<float> (dt) > 1ms) {
       start = HighResClock::now ();
 
-      if (limit_sw1.read () == 0) serial.send_log ("1");
-      if (limit_sw2.read () == 0) serial.send_log ("2");
-      if (limit_sw3.read () == 0) serial.send_log ("3");
-      if (limit_sw4.read () == 0) serial.send_log ("4");
-      if (limit_sw5.read () == 0) serial.send_log ("5");
-      if (limit_sw6.read () == 0) serial.send_log ("6");
-      if (limit_laser1.read () == 0) serial.send_log ("7");  // 左 pc 5
-      if (limit_laser2.read () == 0) serial.send_log ("8");  // 真ん中 pc 6
-      if (limit_laser3.read () == 0) serial.send_log ("9");  // 右 pc 7
+#ifdef ARRAY_PRINTF
+      if (limit_sw1.read () == 0) printf ("1");
+      if (limit_sw2.read () == 0) printf ("2");
+      if (limit_sw3.read () == 0) printf ("3");
+      if (limit_sw4.read () == 0) printf ("4");
+      if (limit_sw5.read () == 0) printf ("5");
+      if (limit_sw6.read () == 0) printf ("6");
+      if (limit_laser1.read () == 0) printf ("7");  // 左 pc 5
+      if (limit_laser2.read () == 0) printf ("8");  // 真ん中 pc 6
+      if (limit_laser3.read () == 0) printf ("9");  // 右 pc 7
 
-      if (emergency_sw.read () == 0) serial.send_log ("きんきゅううううう");
+      if (emergency_sw.read () == 0) printf ("きんきゅううううう");
+      printf ("\n");
+#endif
 
       static std::array<int32_t, 4> enc_raw = {0, 0, 0, 0};
       static bool got_207 = false;
@@ -188,15 +193,20 @@ int main () {
       //     can1.write(msg1);
       // }
 
+#ifndef ARRAY_PRINTF
       // pcへ現在の状態を送信
-      // if (serial.is_connected() && can_send_timer.elapsed_time().count() / 1000 >= 100) {
-      //     std::vector<float> feedback_data = {
-      //         (float)mech_brushless.get_rpm(1),
-      //         (float)mech_brushless.get_rpm(2)
-      //     };
-      //     serial.send_msg(feedback_data);
-      // }
+      static int log_counter = 0;
+      if (serial.is_connected () && log_counter++ % 10 == 0) {
+        std::string log_msg = "";
+        for (int i = 0; i < serial.received_flags.size (); i++) {
+          log_msg += std::to_string (serial.received_flags[i]) + " ";
+        }
+        serial.send_log (log_msg);
+        log_counter = 0;
+      }
     }
+#endif
+
     // ThisThread::sleep_for(1ms);
   }
 }
