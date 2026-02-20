@@ -171,18 +171,6 @@ int main () {
       mechanism_control_thread ();
       mechanism_loop_timestamp = now_timestamp;
 
-      static int can_fail_count = 0;
-      if (!mech_brushless.send_message ()) {
-        can_fail_count++;
-        if (can_fail_count >= 10) {  // 10回連続失敗したらリセット
-          mech_brushless.can_reset ();
-          serial.send_log ("CAN2 reset");
-          can_fail_count = 0;
-        }
-      } else {
-        can_fail_count = 0;  // 成功したらカウンターリセット
-      }
-
       CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
       can1.write (msg1);
     }
