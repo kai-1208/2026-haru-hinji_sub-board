@@ -33,6 +33,11 @@ DigitalIn emergency_sw (PC_13), limit_sw1 (PC_10), limit_sw2 (PC_11), limit_sw3 
 
 LedState prev_state = LedState::Unknown;
 LedState curr_state = LedState::Normal;
+mbed::HighResClock::time_point last_can1_time = HighResClock::now();
+mbed::HighResClock::time_point last_can2_time = HighResClock::now();
+
+bool can1_timeout = false;
+bool can2_timeout = false;
 
 std::array<float, 4> enc_vals = {0.0f, 0.0f, 0.0f, 0.0f};
 
@@ -102,8 +107,19 @@ void mechanism_control_thread () {
  * @brief ネオピクセル光らせます
  */
 void led_state_thread () {
+  // can死んでないか確認
+  CANMessage msg;
+  if (can1.read(msg)) last_can1_time = HighResClock::now();
+  if (can2.read(msg)) last_can2_time = HighResClock::now();
+
+  auto now = HighResClock::now();
+  can1_timeout = std::chrono::duration<float> (now - last_can1_time).count () > 50ms ();
+  can2_timeout = std::chrono::duration<float> (now - last_can2_time).count () > 50ms ();
+  
   if (emergency_sw.read () == 0) {
     curr_state = LedState::OFF;
+  } else if (can1_timeout || can2_timeout) {
+    curr_state = LedState::CommLost;
   } else {
     curr_state = LedState::Normal;
   }
@@ -194,6 +210,10 @@ int main () {
         log_msg += input.right ? "Right " : "";
         log_msg += input.up ? "Up " : "";
         log_msg += input.left ? "Left " : "";
+
+        if (can1_timeout) log_msg += "CAN1_TIMEOUT ";
+        if (can2_timeout) log_msg += "CAN2_TIMEOUT ";
+
         serial.send_log (log_msg);
         log_counter = 0;
       }
