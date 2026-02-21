@@ -2,9 +2,14 @@
 #include "controller_input.hpp"
 #include "led_controller.hpp"
 #include "mbed.h"
+#include "pid.hpp"
 #include "serial_manager.hpp"
 
 #define WITH_SERIAL_MANAGER
+
+#define MECHANISM_LOOP_INTERVAL 0.01f  // 100Hz
+#define LED_LOOP_INTERVAL 0.05f        // 10Hz
+#define MAIN_LOOP_INTERVAL 0.001f      // 1000Hz
 
 // 定数定義
 const int BRUSHLESS_POWER = 3000;
@@ -18,6 +23,11 @@ SerialManager serial (pc, 2, LED1, BUTTON1);  // ID:2 サブNucleo
 CAN can1 (PA_11, PA_12, (int)1e6);  // やぐらあーむ用あぶそ
 CAN can2 (PB_12, PB_13, (int)1e6);  // いなばうわあ用
 C610 mech_brushless (can2);         // いなばうわあ
+PidParameter param = {
+    .gain = {.kp = 2.0f, .ki = 0.0f, .kd = 0.0f},
+      .min = -5000.0f, .max = 5000.0f
+};
+Pid inaba_pid (param);
 CANMessage msg1;
 
 ControllerInput input;
@@ -62,7 +72,7 @@ void mechanism_control_thread () {
     inaba_power[2] = -inaba_power[2];  // モーターの向きに合わせて反転 //条件の整合性のため、最後に反転させる
 
     for (int i = 0; i < 3; i++) {
-      mech_brushless.set_power (i + 1, inaba_power[i]);
+      mech_brushless.set_power (i + 1, inaba_pid.calc (inaba_power[i], mech_brushless.get_rpm (i + 1), MECHANISM_LOOP_INTERVAL));
     }
 
     // やぐらあーむ
@@ -165,8 +175,8 @@ int main () {
     float mechanism_loop_dt = std::chrono::duration<float> (now_timestamp - mechanism_loop_timestamp).count ();
     float led_loop_dt = std::chrono::duration<float> (now_timestamp - led_loop_timestamp).count ();
 
-    if (std::chrono::duration<float> (mechanism_loop_dt) >= 50ms) {
-      mech_brushless.param_update ();  // パラメータ更新
+    if (mechanism_loop_dt > MECHANISM_LOOP_INTERVAL) {  // 100Hzの機構制御ループ
+      mech_brushless.param_update ();                   // パラメータ更新
 
       mechanism_control_thread ();
       mechanism_loop_timestamp = now_timestamp;
@@ -176,17 +186,17 @@ int main () {
       can1.write (msg1);
     }
 
-    if (std::chrono::duration<float> (led_loop_dt) >= 50ms) {
+    if (led_loop_dt > LED_LOOP_INTERVAL) {
       led_state_thread ();
       led_loop_timestamp = now_timestamp;
     }
 
-    if (std::chrono::duration<float> (main_loop_dt) >= 1ms) {  // 1000Hzのメインループ
+    if (main_loop_dt > MAIN_LOOP_INTERVAL) {  // 1000Hzのメインループ
       main_loop_timestamp = now_timestamp;
 
 #ifndef WITH_SERIAL_MANAGER
       if (limit_sw1.read () == 0) printf ("1");
-      if (limit_sw2.read () == 0) printf ("2");
+      if (limit_sw2.read () == 0) printf ("2      ");
       if (limit_sw3.read () == 0) printf ("3");
       if (limit_sw4.read () == 0) printf ("4");
       if (limit_sw5.read () == 0) printf ("5");
