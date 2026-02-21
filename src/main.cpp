@@ -12,7 +12,7 @@
 #define MAIN_LOOP_INTERVAL 0.001f      // 1000Hz
 
 // 定数定義
-const int BRUSHLESS_POWER = 3000;
+const int INABA_RPM = 240;  // いなばうわあの目標回転数 //一秒で4[rad]回転
 const int SERVO_POS_LOW = 80;
 const int SERVO_POS_HIGH = 20;
 
@@ -24,7 +24,7 @@ CAN can1 (PA_11, PA_12, (int)1e6);  // やぐらあーむ用あぶそ
 CAN can2 (PB_12, PB_13, (int)1e6);  // いなばうわあ用
 C610 mech_brushless (can2);         // いなばうわあ
 PidParameter param = {
-    .gain = {.kp = 2.0f, .ki = 0.0f, .kd = 0.0f},
+    .gain = {.kp = 1.5f, .ki = 0.0f, .kd = 0.8f},
       .min = -5000.0f, .max = 5000.0f
 };
 Pid inaba_pid (param);
@@ -58,9 +58,9 @@ void mechanism_control_thread () {
   if (serial.is_connected ()) {
     input.update (serial);
     // いなばうわあ
-    inaba_power[0] = input.cross ? BRUSHLESS_POWER : (input.triangle ? -BRUSHLESS_POWER : 0);
-    inaba_power[1] = input.up ? BRUSHLESS_POWER : (input.down ? -BRUSHLESS_POWER : 0);
-    inaba_power[2] = input.r1 ? BRUSHLESS_POWER : (input.l1 ? -BRUSHLESS_POWER : 0);
+    inaba_power[0] = input.cross ? INABA_RPM : (input.triangle ? -INABA_RPM : 0);
+    inaba_power[1] = input.up ? INABA_RPM : (input.down ? -INABA_RPM : 0);
+    inaba_power[2] = input.r1 ? INABA_RPM : (input.l1 ? -INABA_RPM : 0);
 
     if (limit_sw1.read () == 0 && inaba_power[0] < 0) inaba_power[0] = 0;
     if (limit_sw2.read () == 0 && inaba_power[1] < 0) inaba_power[1] = 0;
