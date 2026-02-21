@@ -101,37 +101,63 @@ void mechanism_control_thread () {
 
     // やぐらあーむ
 
-    // 以下センサーによる自動制御
-    static bool pre_laser[3] = {false, false, false};
-    bool curr_laser[3] = {limit_laser1.read () == 0, limit_laser2.read () == 0, limit_laser3.read () == 0};
-    for (int i = 0; i < 3; i++) {
-      if (curr_laser[i] && !pre_laser[i]) {
-        servo_state[i] = true;
-      }
-      pre_laser[i] = curr_laser[i];
+    // // 以下センサーによる自動制御
+    // static bool pre_laser[3] = {false, false, false};
+    // bool curr_laser[3] = {limit_laser1.read () == 0, limit_laser2.read () == 0, limit_laser3.read () == 0};
+    // for (int i = 0; i < 3; i++) {
+    //   if (curr_laser[i] && !pre_laser[i]) {
+    //     servo_state[i] = true;
+    //   }
+    //   pre_laser[i] = curr_laser[i];
+    // }
+
+    // static bool pre_ps = false;
+    // static bool pre_r2 = false;
+    // static bool pre_options = false;
+    // static bool pre_l2 = false;
+    // if (input.ps && !pre_ps) {
+    //   all_servo_state = !all_servo_state;
+    //   for (int i = 0; i < 3; i++) {
+    //     servo_state[i] = all_servo_state;
+    //   }
+    // }
+    // pre_ps = input.ps;
+    // if (input.r2 && !pre_r2) servo_state[0] = !servo_state[0];
+    // pre_r2 = input.r2;
+    // if (input.options && !pre_options) servo_state[1] = !servo_state[1];
+    // pre_options = input.options;
+    // if (input.l2 && !pre_l2) servo_state[2] = !servo_state[2];
+
+    // for (int i = 0; i < 3; i++) {
+    //   servo[i] = servo_state[i] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+    // }
+    // pre_l2 = input.l2;
+
+    // めちゃかんたんサーボ制御
+    if (input.r2) servo_state[0] =! servo_state[0];
+    if (input.options) servo_state[1] =! servo_state[1];
+    if (input.l2) servo_state[2] =! servo_state[2];
+    if (input.ps) {
+      for (int i = 0; i < 3; i++) servo_state[i] = true;
+    } else {
+      for (int i = 0; i < 3; i++) servo_state[i] = false;
     }
 
-    static bool pre_ps = false;
-    static bool pre_r2 = false;
-    static bool pre_options = false;
-    static bool pre_l2 = false;
-    if (input.ps && !pre_ps) {
-      all_servo_state = !all_servo_state;
-      for (int i = 0; i < 3; i++) {
-        servo_state[i] = all_servo_state;
-      }
+    if (servo_state[0]) {
+      servo[0] = SERVO_POS_HIGH;
+    } else {
+      servo[0] = SERVO_POS_LOW;
     }
-    pre_ps = input.ps;
-    if (input.r2 && !pre_r2) servo_state[0] = !servo_state[0];
-    pre_r2 = input.r2;
-    if (input.options && !pre_options) servo_state[1] = !servo_state[1];
-    pre_options = input.options;
-    if (input.l2 && !pre_l2) servo_state[2] = !servo_state[2];
-
-    for (int i = 0; i < 3; i++) {
-      servo[i] = servo_state[i] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+    if (servo_state[1]) {
+      servo[1] = SERVO_POS_HIGH;
+    } else {
+      servo[1] = SERVO_POS_LOW;
     }
-    pre_l2 = input.l2;
+    if (servo_state[2]) {
+      servo[2] = SERVO_POS_HIGH;
+    } else {
+      servo[2] = SERVO_POS_LOW;
+    }
   } else {
     // 通信切断時は停止
     for (int i = 1; i < 4; i++) mech_brushless.set_power (i, 0);
