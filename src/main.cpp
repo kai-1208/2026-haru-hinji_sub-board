@@ -22,11 +22,13 @@ SerialManager serial (pc, 2, LED1, BUTTON1);  // ID:2 サブNucleo
 CAN can1 (PA_11, PA_12, (int)1e6);  // やぐらあーむ用あぶそ
 CAN can2 (PB_12, PB_13, (int)1e6);  // いなばうわあ用
 C610 mech_brushless (can2);         // いなばうわあ
+
 std::array<PidParameter, 3> params = {
-    {.gain = {.kp = 1.8f, .ki = 0.0f, .kd = 0.008f}, .min = -3000.0f, .max = 3000.0f},
-    {.gain = {.kp = 1.8f, .ki = 0.0f, .kd = 0.008f}, .min = -3000.0f, .max = 3000.0f},
-    {.gain = {.kp = 1.8f, .ki = 0.0f, .kd = 0.008f}, .min = -3000.0f, .max = 3000.0f}
+    PidParameter{PidGain{11.0f, 0.0f, 0.015f}, -10000.0f, 10000.0f},
+    PidParameter{PidGain{11.0f, 0.0f, 0.015f}, -10000.0f, 10000.0f},
+    PidParameter{PidGain{11.0f, 0.0f, 0.015f}, -10000.0f, 10000.0f}
 };
+
 std::array<Pid, 3> inaba_pid_array = {Pid (params[0]), Pid (params[1]), Pid (params[2])};
 CANMessage msg1;
 
@@ -77,9 +79,9 @@ void mechanism_control_thread () {
     mbed::HighResClock::time_point now = HighResClock::now ();
     static mbed::HighResClock::time_point pre = HighResClock::now ();
 
-    inaba_pwm[0] = input.cross ? BRUSHLESS_RPM : (input.triangle ? -BRUSHLESS_RPM : 0);
-    inaba_pwm[1] = input.up ? BRUSHLESS_RPM : (input.down ? -BRUSHLESS_RPM : 0);
-    inaba_pwm[2] = input.r1 ? BRUSHLESS_RPM : (input.l1 ? -BRUSHLESS_RPM : 0);
+    inaba_pwm[0] = input.cross ? -BRUSHLESS_RPM : (input.triangle ? BRUSHLESS_RPM : 0);
+    inaba_pwm[1] = input.up ? -BRUSHLESS_RPM : (input.down ? BRUSHLESS_RPM : 0);
+    inaba_pwm[2] = input.r1 ? -BRUSHLESS_RPM : (input.l1 ? BRUSHLESS_RPM : 0);
 
     if (limit_sw1.read () == 0 && inaba_pwm[0] < 0) inaba_pwm[0] = 0;
     if (limit_sw2.read () == 0 && inaba_pwm[1] < 0) inaba_pwm[1] = 0;
@@ -91,7 +93,7 @@ void mechanism_control_thread () {
     inaba_pwm[2] = -inaba_pwm[2];  // モーターの向きに合わせて反転 //条件の整合性のため、最後に反転させる
 
     for (int i = 0; i < 3; i++) {
-      mech_brushless.set_power (i + 1, inaba_pid.calc (inaba_pwm[i], mech_brushless.get_rpm (i + 1), std::chrono::duration<float> (now - pre).count ()));
+      mech_brushless.set_power (i + 1, inaba_pid_array[i].calc (inaba_pwm[i], mech_brushless.get_rpm (i + 1), std::chrono::duration<float> (now - pre).count ()));
     }
 
     pre = now;
