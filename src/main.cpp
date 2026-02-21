@@ -7,12 +7,11 @@
 
 #define WITH_SERIAL_MANAGER
 
-#define MECHANISM_LOOP_INTERVAL 0.01f  // 100Hz
-#define LED_LOOP_INTERVAL 0.05f        // 10Hz
-#define MAIN_LOOP_INTERVAL 0.001f      // 1000Hz
+#define WITH_PID
 
 // 定数定義
-const int INABA_RPM = 240;  // いなばうわあの目標回転数 //一秒で4[rad]回転
+const int BRUSHLESS_POWER = 3000;
+const int BRUSHLESS_RPM = 1200;  //[rad\m]
 const int SERVO_POS_LOW = 80;
 const int SERVO_POS_HIGH = 20;
 
@@ -23,17 +22,17 @@ SerialManager serial (pc, 2, LED1, BUTTON1);  // ID:2 サブNucleo
 CAN can1 (PA_11, PA_12, (int)1e6);  // やぐらあーむ用あぶそ
 CAN can2 (PB_12, PB_13, (int)1e6);  // いなばうわあ用
 C610 mech_brushless (can2);         // いなばうわあ
-PidParameter param = {
-    .gain = {.kp = 1.5f, .ki = 0.0f, .kd = 0.8f},
-      .min = -5000.0f, .max = 5000.0f
+std::array<PidParameter, 3> params = {
+    {.gain = {.kp = 1.8f, .ki = 0.0f, .kd = 0.008f}, .min = -3000.0f, .max = 3000.0f},
+    {.gain = {.kp = 1.8f, .ki = 0.0f, .kd = 0.008f}, .min = -3000.0f, .max = 3000.0f},
+    {.gain = {.kp = 1.8f, .ki = 0.0f, .kd = 0.008f}, .min = -3000.0f, .max = 3000.0f}
 };
-Pid inaba_pid (param);
+std::array<Pid, 3> inaba_pid_array = {Pid (params[0]), Pid (params[1]), Pid (params[2])};
 CANMessage msg1;
 
 ControllerInput input;
 LedController Led (PA_9, PA_10);
 
-int16_t inaba_power[3] = {0};        // 0: 右, 1: 左, 2: 中央
 std::array<uint8_t, 8> servo = {0};  // 0: 右, 1: 中央, 2: 左
 
 bool servo_state[3] = {false};
@@ -46,9 +45,6 @@ LedState curr_state = LedState::Normal;
 mbed::HighResClock::time_point last_can1_time = HighResClock::now ();
 mbed::HighResClock::time_point last_can2_time = HighResClock::now ();
 
-bool can1_timeout = false;
-bool can2_timeout = false;
-
 std::array<float, 4> enc_vals = {0.0f, 0.0f, 0.0f, 0.0f};
 
 /**
@@ -57,10 +53,12 @@ std::array<float, 4> enc_vals = {0.0f, 0.0f, 0.0f, 0.0f};
 void mechanism_control_thread () {
   if (serial.is_connected ()) {
     input.update (serial);
-    // いなばうわあ
-    inaba_power[0] = input.cross ? INABA_RPM : (input.triangle ? -INABA_RPM : 0);
-    inaba_power[1] = input.up ? INABA_RPM : (input.down ? -INABA_RPM : 0);
-    inaba_power[2] = input.r1 ? INABA_RPM : (input.l1 ? -INABA_RPM : 0);
+// いなばうわあ
+#ifndef WITH_PID
+    static int16_t inaba_power[3] = {0};  // 0: 右, 1: 左, 2: 中央
+    inaba_power[0] = input.cross ? BRUSHLESS_POWER : (input.triangle ? -BRUSHLESS_POWER : 0);
+    inaba_power[1] = input.up ? BRUSHLESS_POWER : (input.down ? -BRUSHLESS_POWER : 0);
+    inaba_power[2] = input.r1 ? BRUSHLESS_POWER : (input.l1 ? -BRUSHLESS_POWER : 0);
 
     if (limit_sw1.read () == 0 && inaba_power[0] < 0) inaba_power[0] = 0;
     if (limit_sw2.read () == 0 && inaba_power[1] < 0) inaba_power[1] = 0;
@@ -72,8 +70,32 @@ void mechanism_control_thread () {
     inaba_power[2] = -inaba_power[2];  // モーターの向きに合わせて反転 //条件の整合性のため、最後に反転させる
 
     for (int i = 0; i < 3; i++) {
-      mech_brushless.set_power (i + 1, inaba_pid.calc (inaba_power[i], mech_brushless.get_rpm (i + 1), MECHANISM_LOOP_INTERVAL));
+      mech_brushless.set_power (i + 1, inaba_power[i]);
     }
+#else
+    static int16_t inaba_pwm[3] = {0};  // 0: 右, 1: 左, 2: 中央
+    mbed::HighResClock::time_point now = HighResClock::now ();
+    static mbed::HighResClock::time_point pre = HighResClock::now ();
+
+    inaba_pwm[0] = input.cross ? BRUSHLESS_RPM : (input.triangle ? -BRUSHLESS_RPM : 0);
+    inaba_pwm[1] = input.up ? BRUSHLESS_RPM : (input.down ? -BRUSHLESS_RPM : 0);
+    inaba_pwm[2] = input.r1 ? BRUSHLESS_RPM : (input.l1 ? -BRUSHLESS_RPM : 0);
+
+    if (limit_sw1.read () == 0 && inaba_pwm[0] < 0) inaba_pwm[0] = 0;
+    if (limit_sw2.read () == 0 && inaba_pwm[1] < 0) inaba_pwm[1] = 0;
+    if (limit_sw3.read () == 0 && inaba_pwm[2] < 0) inaba_pwm[2] = 0;
+    if (limit_sw4.read () == 0 && inaba_pwm[0] > 0) inaba_pwm[0] = 0;
+    if (limit_sw5.read () == 0 && inaba_pwm[1] > 0) inaba_pwm[1] = 0;
+    if (limit_sw6.read () == 0 && inaba_pwm[2] > 0) inaba_pwm[2] = 0;
+
+    inaba_pwm[2] = -inaba_pwm[2];  // モーターの向きに合わせて反転 //条件の整合性のため、最後に反転させる
+
+    for (int i = 0; i < 3; i++) {
+      mech_brushless.set_power (i + 1, inaba_pid.calc (inaba_pwm[i], mech_brushless.get_rpm (i + 1), std::chrono::duration<float> (now - pre).count ()));
+    }
+
+    pre = now;
+#endif
 
     // やぐらあーむ
 
@@ -82,7 +104,7 @@ void mechanism_control_thread () {
     bool curr_laser[3] = {limit_laser1.read () == 0, limit_laser2.read () == 0, limit_laser3.read () == 0};
     for (int i = 0; i < 3; i++) {
       if (curr_laser[i] && !pre_laser[i]) {
-        servo_state[i] = false;
+        servo_state[i] = true;
       }
       pre_laser[i] = curr_laser[i];
     }
@@ -120,19 +142,8 @@ void mechanism_control_thread () {
  * @brief ネオピクセル光らせます
  */
 void led_state_thread () {
-  // can死んでないか確認
-  CANMessage msg;
-  if (can1.read (msg)) last_can1_time = HighResClock::now ();
-  if (can2.read (msg)) last_can2_time = HighResClock::now ();
-
-  auto now = HighResClock::now ();
-  can1_timeout = std::chrono::duration<float> (now - last_can1_time).count () > 0.05f;
-  can2_timeout = std::chrono::duration<float> (now - last_can2_time).count () > 0.05f;
-
   if (emergency_sw.read () == 0) {
     curr_state = LedState::OFF;
-  } else if (can1_timeout || can2_timeout) {
-    curr_state = LedState::CommLost;
   } else {
     curr_state = LedState::Normal;
   }
@@ -175,28 +186,39 @@ int main () {
     float mechanism_loop_dt = std::chrono::duration<float> (now_timestamp - mechanism_loop_timestamp).count ();
     float led_loop_dt = std::chrono::duration<float> (now_timestamp - led_loop_timestamp).count ();
 
-    if (mechanism_loop_dt > MECHANISM_LOOP_INTERVAL) {  // 100Hzの機構制御ループ
-      mech_brushless.param_update ();                   // パラメータ更新
+    if (std::chrono::duration<float> (mechanism_loop_dt) >= 1ms) {
+      mech_brushless.param_update ();  // パラメータ更新
 
       mechanism_control_thread ();
       mechanism_loop_timestamp = now_timestamp;
 
-      mech_brushless.send_message ();
+      static int can_fail_count = 0;
+      if (!mech_brushless.send_message ()) {
+        can_fail_count++;
+        if (can_fail_count >= 100) {  // 10回連続失敗したらリセット
+          mech_brushless.can_reset ();
+          serial.send_log ("CAN2 reset");
+          can_fail_count = 0;
+        }
+      } else {
+        can_fail_count = 0;  // 成功したらカウンターリセット
+      }
+
       CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
       can1.write (msg1);
     }
 
-    if (led_loop_dt > LED_LOOP_INTERVAL) {
+    if (std::chrono::duration<float> (led_loop_dt) >= 50ms) {
       led_state_thread ();
       led_loop_timestamp = now_timestamp;
     }
 
-    if (main_loop_dt > MAIN_LOOP_INTERVAL) {  // 1000Hzのメインループ
+    if (std::chrono::duration<float> (main_loop_dt) >= 1ms) {  // 1000Hzのメインループ
       main_loop_timestamp = now_timestamp;
 
 #ifndef WITH_SERIAL_MANAGER
       if (limit_sw1.read () == 0) printf ("1");
-      if (limit_sw2.read () == 0) printf ("2      ");
+      if (limit_sw2.read () == 0) printf ("2");
       if (limit_sw3.read () == 0) printf ("3");
       if (limit_sw4.read () == 0) printf ("4");
       if (limit_sw5.read () == 0) printf ("5");
@@ -230,8 +252,7 @@ int main () {
         log_msg += input.up ? "Up " : "";
         log_msg += input.left ? "Left " : "";
 
-        if (can1_timeout) log_msg += "CAN1_TIMEOUT ";
-        if (can2_timeout) log_msg += "CAN2_TIMEOUT ";
+        log_msg += "rpm: " + std::to_string (mech_brushless.get_rpm (1)) + " " + std::to_string (mech_brushless.get_rpm (2)) + " " + std::to_string (mech_brushless.get_rpm (3));
 
         serial.send_log (log_msg);
         log_counter = 0;
