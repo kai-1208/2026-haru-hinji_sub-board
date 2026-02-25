@@ -47,6 +47,7 @@ void C610::param_update () {
     }
   }
 }
+
 void C610::can_reset () {
   can.reset ();
 }

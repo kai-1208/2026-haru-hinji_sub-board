@@ -11,7 +11,7 @@
 
 // 定数定義
 const int BRUSHLESS_POWER = 3000;
-const int BRUSHLESS_RPM = 1200;  //[rad\m]
+const int BRUSHLESS_RPM = (M_PI * (1.0 / 3.0)) * 60 * 36;  //[rad\m] //ギア比込
 const int SERVO_POS_LOW = 80;
 const int SERVO_POS_HIGH = 20;
 
@@ -24,9 +24,9 @@ CAN can2 (PB_12, PB_13, (int)1e6);  // いなばうわあ用
 C610 mech_brushless (can2);         // いなばうわあ
 
 std::array<PidParameter, 3> params = {
-    PidParameter{PidGain{11.0f, 0.0f, 0.015f}, -10000.0f, 10000.0f},
-    PidParameter{PidGain{11.0f, 0.0f, 0.015f}, -10000.0f, 10000.0f},
-    PidParameter{PidGain{11.0f, 0.0f, 0.015f}, -10000.0f, 10000.0f}
+    PidParameter{PidGain{10.0f, 0.01f, 0.03f}, -10000.0f, 10000.0f},
+    PidParameter{PidGain{10.0f, 0.01f, 0.03f}, -10000.0f, 10000.0f},
+    PidParameter{PidGain{10.0f, 0.01f, 0.03f}, -10000.0f, 10000.0f}
 };
 
 std::array<Pid, 3> inaba_pid_array = {Pid (params[0]), Pid (params[1]), Pid (params[2])};
@@ -115,12 +115,14 @@ void mechanism_control_thread () {
     static bool pre_r2 = false;
     static bool pre_options = false;
     static bool pre_l2 = false;
+
     if (input.ps && !pre_ps) {
       all_servo_state = !all_servo_state;
       for (int i = 0; i < 3; i++) {
         servo_state[i] = all_servo_state;
       }
     }
+
     pre_ps = input.ps;
     if (input.r2 && !pre_r2) servo_state[0] = !servo_state[0];
     pre_r2 = input.r2;
@@ -131,18 +133,25 @@ void mechanism_control_thread () {
     for (int i = 0; i < 3; i++) {
       servo[i] = servo_state[i] ? SERVO_POS_HIGH : SERVO_POS_LOW;
     }
+    servo[3] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+    servo[4] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+    servo[5] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+    servo[6] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+    servo[7] = servo_state[2] ? SERVO_POS_HIGH : SERVO_POS_LOW;
+
     pre_l2 = input.l2;
   } else {
     // 通信切断時は停止
     for (int i = 1; i < 4; i++) mech_brushless.set_power (i, 0);
     // サーボも初期位置に
-    for (int i = 0; i < 3; i++) servo[i] = SERVO_POS_LOW;
+    for (int i = 0; i < 4; i++) servo[i] = SERVO_POS_LOW;
   }
 }
 
 /**
  * @brief ネオピクセル光らせます
  */
+
 void led_state_thread () {
   if (emergency_sw.read () == 0) {
     curr_state = LedState::OFF;
@@ -206,7 +215,7 @@ int main () {
         can_fail_count = 0;  // 成功したらカウンターリセット
       }
 
-      CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
+      CANMessage msg1 (149, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
       can1.write (msg1);
     }
 
