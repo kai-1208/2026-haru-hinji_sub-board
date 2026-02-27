@@ -215,7 +215,7 @@ int main () {
         can_fail_count = 0;  // 成功したらカウンターリセット
       }
 
-      CANMessage msg1 (149, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
+      CANMessage msg1 (140, reinterpret_cast<const uint8_t *> (servo.data ()), 8);
       can1.write (msg1);
     }
 
